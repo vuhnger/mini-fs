@@ -68,11 +68,12 @@ struct inode* create_dir( struct inode* parent, const char* name )
     // Check if directory is root
     if (!parent){
         debug(__func__, "parent pointer was NULL", "");
-        MAX_ID++;
         node = create_inode(MAX_ID, new_dir_name, 1,0,0,0,NULL);
+        MAX_ID++;
         if (!node){
             free(node);
             debug(__func__, "failed to create root node", "");
+            --MAX_ID;
             return NULL;
         }
         return node;
@@ -83,7 +84,6 @@ struct inode* create_dir( struct inode* parent, const char* name )
         return NULL;  
     }
 
-
     // Check if there already exists a directory or file with the new name in the current directory
     if (find_inode_by_name(parent, name)){
         debug(__func__, "entry with (name) already exists", name);
@@ -91,7 +91,7 @@ struct inode* create_dir( struct inode* parent, const char* name )
     }
 
     // Allocate memory for new directory
-    // Calculated as: size of current dir + size of new dir
+    // Calculated as: size of current dir + size of new dir + 1
     
     // Check whether num_entries has been initialized
     // Update the number of entries to reflect a new dir added
@@ -107,12 +107,12 @@ struct inode* create_dir( struct inode* parent, const char* name )
     }
     parent->entries = new_entries;
 
-    // Increment the max id 
-    ++MAX_ID;
-
+    
     // Create the new node
     node = create_inode(MAX_ID,new_dir_name,1,0,0,0,NULL);
-
+    
+    // Increment the max id 
+    ++MAX_ID;
     if (!node){
         free(new_dir_name);
         --parent->num_entries;
@@ -269,7 +269,7 @@ void fs_shutdown(struct inode* inode)
     free(inode);
 }
 
-/* This static variable is used to change the indentation while debug_fs
+/* This static variable is used to change the indentation while 
  * is walking through the tree of inodes and prints information.
  */
 static int indent = 0;
