@@ -43,7 +43,6 @@ struct inode* create_inode(
         return NULL;
     }
     
-    // Set values for the node
     node->id = id;
     node->name = name;
     node->is_directory = is_directory;
@@ -51,7 +50,11 @@ struct inode* create_inode(
     node->filesize = filesize;
     node->num_entries = num_entries;
     node->entries = entries;
-    debug(__func__, "created node", "");
+    char node_info[100];
+    snprintf(node_info, sizeof(node_info), 
+             "Node(id=%u, name=%s, dir=%d, readonly=%d, size=%u, entries=%u)", 
+             id, name, is_directory, is_readonly, filesize, num_entries);
+    debug(__func__, "created node: ", node_info);
     return node;
 }
 
@@ -92,7 +95,6 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     int blocks_needed = (int) (ceil((double) size_in_bytes / 4096));
 
     
-    //TODO: fix entries pointer
     node = create_inode(MAX_ID, new_file_name,0,readonly,size_in_bytes,blocks_needed,NULL);
     ++MAX_ID;
 
@@ -254,8 +256,47 @@ int delete_file(struct inode* parent, struct inode* node)
         return -1;
     }
 
-    return 0;
+    int file_index = -1;
+    for (int i = 0; i < parent->num_entries; i++) {
+        if ((uintptr_t)node == parent->entries[i]) {
+            file_index = i;
+            break;
+        }
+    }
+    
+    if (file_index == -1) {
+        debug(__func__, "aborting file deletion: file not found in parent directory", "");
+        return -1;
+    }
 
+    
+    for (int i = 0; i < node->num_entries; i++) {
+        int result = free_block(node->entries[i]);
+        if (result == -1) {
+            debug(__func__, "warning: failed to free block", "");
+        }
+    }
+
+    for (int i = file_index; i < node->num_entries - 1; i++){
+        parent->entries[i] = parent->entries[i + 1];
+    }
+    --parent->num_entries;
+    
+    free(node->name);
+    free(node->entries);
+    free(node);
+
+    uintptr_t *new_entries = realloc(parent->entries, parent->num_entries * sizeof(uintptr_t));
+    if (!new_entries){
+        debug(__func__, "failed to reallocate memory for entry array", "");
+        free(new_entries);
+        return -1;
+    }
+    parent->entries = new_entries;
+   
+
+    debug(__func__, "file deleted successfully", "");
+    return 0;
 }
 
 int delete_dir( struct inode* parent, struct inode* node )
@@ -320,6 +361,7 @@ struct inode *load_inodes(const char *master_file_table) {
         }
         fread(entries, sizeof(uintptr_t), num_entries, file);
 
+        debug(__func__, "loading inode", name);
         struct inode *node = create_inode(id,name,is_directory,is_readonly,filesize,num_entries,entries);
 
         if (id >= inode_count) {
