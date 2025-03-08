@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <math.h>
 
 // Switch this to 0 to avoid cluttering terminal with print statements
 #define DEBUG_MODE 1
@@ -92,7 +91,7 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     // Allocate memory for entries
 
     // Calculcate the number of blocks needed to store the file
-    int blocks_needed = (int) (ceil((double) size_in_bytes / 4096));
+    int blocks_needed = (size_in_bytes + 4095) / 4096;
 
     
     node = create_inode(MAX_ID, new_file_name,0,readonly,size_in_bytes,blocks_needed,NULL);
@@ -248,7 +247,7 @@ int delete_file(struct inode* parent, struct inode* node)
         return -1;
     }
     if (node->is_directory) {
-        debug(__func__, "aborting file deletion: node is a directory", "");
+        debug(__func__, "aborting file deletion: node is a directory", node->name);
         return -1;
     }
     if (!parent->is_directory) {
