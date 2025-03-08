@@ -7,6 +7,9 @@
 #include <errno.h>
 #include <math.h>
 
+// Switch this to 0 to avoid cluttering terminal with print statements
+#define DEBUG_MODE 1
+
 // MAX ID must be incremented AFTER use 
 static int MAX_ID = 0;
 
@@ -18,7 +21,9 @@ static int MAX_ID = 0;
  * @param optional additional information, pass "" as default arg
  */
 void debug(const char* function_name, const char* message, const char* optional_string) {
-    fprintf(stderr, "[DEBUG] %s: %s %s\n", function_name, message, optional_string);
+    if (DEBUG_MODE){
+        fprintf(stderr, "[DEBUG] %s: %s %s\n", function_name, message, optional_string);
+    }
 }
 
 struct inode* create_inode(
@@ -229,10 +234,28 @@ struct inode *find_inode_by_name(struct inode *parent, const char *name)
     return NULL;
 }
 
-int delete_file( struct inode* parent, struct inode* node )
+int delete_file(struct inode* parent, struct inode* node)
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return -1;
+    // Validation checks
+    if (!parent) {
+        debug(__func__, "aborting file deletion: parent pointer was null", "");
+        return -1;
+    }
+    if (!node) {
+        debug(__func__, "aborting file deletion: file is null", "");
+        return -1;
+    }
+    if (node->is_directory) {
+        debug(__func__, "aborting file deletion: node is a directory", "");
+        return -1;
+    }
+    if (!parent->is_directory) {
+        debug(__func__, "aborting file deletion: parent is not a directory", "");
+        return -1;
+    }
+
+    return 0;
+
 }
 
 int delete_dir( struct inode* parent, struct inode* node )
@@ -244,7 +267,6 @@ int delete_dir( struct inode* parent, struct inode* node )
 void save_inodes(const char *master_file_table, struct inode *root)
 {
     fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return -1;
 }
 
 struct inode *load_inodes(const char *master_file_table) {
