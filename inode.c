@@ -20,9 +20,29 @@ struct inode* create_dir( struct inode* parent, const char* name )
     return NULL;
 }
 
-struct inode* find_inode_by_name( struct inode* parent, const char* name )
+struct inode *find_inode_by_name(struct inode *parent, const char *name)
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
+
+    if (!parent)
+    {
+        return NULL;
+    }
+    if (!(parent->is_directory))
+    {
+        return NULL;
+    }
+
+    for (int i = 0; i < parent->num_entries; i++)
+    {
+        struct inode *child = (struct inode *)parent->entries[i];
+        if (strcmp(child->name, name) == 0)
+        {
+            fprintf(stderr, "name:%s\nchild name:%s\n", child->name, name);
+            return child;
+        }
+    }
+
+    // fprintf(stderr, "%s is not implemented\n", __FUNCTION__);
     return NULL;
 }
 
