@@ -8,6 +8,43 @@
 
 static int MAX_ID = 0;
 
+/* 
+ * Prints a debug message with the function name.
+ * 
+ * @param function_name The name of the function calling debug.
+ * @param message The debug message to print.
+ * @param optional additional information, pass "" as default arg
+ */
+void debug(const char* function_name, const char* message, const char* optional_string) {
+    fprintf(stderr, "[DEBUG] %s: %s %s\n", function_name, message, optional_string);
+}
+
+struct inode* create_inode(
+    uint32_t id,
+    char* name,
+    char is_directory,
+    char is_readonly,
+    uint32_t filesize,
+    uint32_t num_entries,
+    uintptr_t* entries
+){
+    // Create the inode to be inserted
+    struct inode* node = malloc(sizeof(struct inode));
+    if (!node) return NULL;
+    
+    // Set values for the node
+    node->id = id;
+    node->name = name;
+    node->is_directory = is_directory;
+    node->is_readonly = is_readonly;
+    node->filesize = filesize;
+    node->num_entries = num_entries;
+    node->entries = entries;
+    debug(__func__, "created node", "");
+    return node;
+}
+
+
 struct inode* create_file( struct inode* parent, const char* name, char readonly, int size_in_bytes )
 {
     fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
@@ -16,9 +53,82 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
 
 struct inode* create_dir( struct inode* parent, const char* name )
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return NULL;
+    debug(__func__, "attempting directory creation: ", name);
+
+    struct inode* node;
+
+    // Duplicate name to adjust the data type to match constructor of an inode
+    char* new_dir_name = strdup(name);
+    if (!new_dir_name){
+        debug(__func__, "failed to allocate memory for directory name", "");
+        free(new_dir_name);
+        return NULL;
+    }
+
+    // Check if directory is root
+    if (!parent){
+        debug(__func__, "parent pointer was NULL", "");
+        MAX_ID++;
+        node = create_inode(MAX_ID, new_dir_name, 1,0,0,0,NULL);
+        if (!node){
+            free(node);
+            debug(__func__, "failed to create root node", "");
+            return NULL;
+        }
+        return node;
+    } 
+
+    if (!parent->is_directory){
+        debug(__func__, "parent pointer is not a directory", "");
+        return NULL;  
+    }
+
+
+    // Check if there already exists a directory or file with the new name in the current directory
+    if (find_inode_by_name(parent, name)){
+        debug(__func__, "entry with (name) already exists", name);
+        return NULL;
+    }
+
+    // Allocate memory for new directory
+    // Calculated as: size of current dir + size of new dir
+    
+    // Check whether num_entries has been initialized
+    // Update the number of entries to reflect a new dir added
+    ++parent->num_entries;
+    uintptr_t* new_entries = realloc(parent->entries, sizeof(uintptr_t) * parent->num_entries);
+    //TODO: Must free the realloc if it fails
+    
+    if (!new_entries){
+        // If memory reallocation fails, the count should not be increased because no dir was added
+        --parent->num_entries;
+        debug(__func__, "memory allocation for new_entries failed", "");
+        return NULL;
+    }
+    parent->entries = new_entries;
+
+    // Increment the max id 
+    ++MAX_ID;
+
+    // Create the new node
+    node = create_inode(MAX_ID,new_dir_name,1,0,0,0,NULL);
+
+    if (!node){
+        free(new_dir_name);
+        --parent->num_entries;
+        --MAX_ID;
+        debug(__func__, "memory allocation for new_node failed", "");
+        return NULL;
+    }
+    // Add a pointer to the new dir from parent dir
+    parent->entries[parent->num_entries - 1] = (uintptr_t) node;
+
+    debug(__func__, "created directory: ", name);
+    return node;
+
 }
+
+
 
 struct inode *find_inode_by_name(struct inode *parent, const char *name)
 {
