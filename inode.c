@@ -238,7 +238,7 @@ struct inode *find_inode_by_name(struct inode *parent, const char *name)
 
 int delete_file(struct inode* parent, struct inode* node)
 {
-    // Validation checks
+    
     if (!parent) {
         debug(__func__, "aborting file deletion: parent pointer was null", "");
         return -1;
@@ -274,6 +274,7 @@ int delete_file(struct inode* parent, struct inode* node)
         int result = free_block(node->entries[i]);
         if (result == -1) {
             debug(__func__, "warning: failed to free block", "");
+            return -1;
         }
     }
 
