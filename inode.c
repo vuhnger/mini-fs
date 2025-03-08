@@ -5,7 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 
+// MAX ID must be incremented AFTER use 
 static int MAX_ID = 0;
 
 /* 
@@ -30,7 +32,11 @@ struct inode* create_inode(
 ){
     // Create the inode to be inserted
     struct inode* node = malloc(sizeof(struct inode));
-    if (!node) return NULL;
+    if (!node) {
+        debug(__func__, "failed to allocate memory for new node", "");
+        free(node);
+        return NULL;
+    }
     
     // Set values for the node
     node->id = id;
@@ -47,8 +53,75 @@ struct inode* create_inode(
 
 struct inode* create_file( struct inode* parent, const char* name, char readonly, int size_in_bytes )
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return NULL;
+    debug(__func__, "attempting to create file:", name);
+
+    if (!parent){
+        debug(__func__, "parent pointer was NULL", "");
+        return NULL;
+    }
+
+    if (!parent->is_directory){
+        debug(__func__, "parent pointer is not a dir", "");
+        return NULL;
+    }
+
+    // Check if there already exists a file with the new name in the current directory
+    if (find_inode_by_name(parent, name)){
+        debug(__func__, "entry with (name) already exists", name);
+        return NULL;
+    }
+
+    // Duplicate name to adjust the data type to match constructor of an inode
+    char* new_file_name = strdup(name);
+    if (!new_file_name){
+        debug(__func__, "failed to allocate memory for file name", "");
+        free(new_file_name);
+        return NULL;
+    }
+
+    struct inode* node;
+
+    // Allocate memory for entries
+
+    // Calculcate the number of blocks needed to store the file
+    int blocks_needed = (int) (ceil((double) size_in_bytes / 4096));
+
+    
+    //TODO: fix entries pointer
+    node = create_inode(MAX_ID, new_file_name,0,readonly,size_in_bytes,blocks_needed,NULL);
+    ++MAX_ID;
+
+    // Allocate memory for entries
+    node->entries = malloc(sizeof(uintptr_t) * blocks_needed);
+    if (!node->entries){
+        debug(__func__, "failed to allocate memory for new file","");
+        free(node->entries);
+        return NULL;
+    }
+
+    for (int i = 0; i < blocks_needed; i++){
+        int block = allocate_block(1);
+        if (block == -1){
+            debug(__func__, "failed to allocate memory for block", "");
+            free_block(1);
+            return NULL;
+        }
+        node->entries[i] = block;
+    }
+
+    // Reallocate space for this file in parent dir entries
+    parent->entries = realloc(parent->entries, sizeof(struct inode) * parent->num_entries+ 1);
+    if(!parent->entries){
+        debug(__func__, "failed to reallocate memory in parent directory", "");
+        free(parent->entries);
+        return NULL;
+    }
+    parent->num_entries++;
+
+    parent->entries[parent->num_entries - 1] = (uintptr_t) node;
+
+    debug(__func__, "created file: ", name);
+    return node;
 }
 
 struct inode* create_dir( struct inode* parent, const char* name )
@@ -168,16 +241,17 @@ int delete_dir( struct inode* parent, struct inode* node )
     return -1;
 }
 
-void save_inodes( const char* master_file_table, struct inode* root )
+void save_inodes(const char *master_file_table, struct inode *root)
 {
     fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return;
+    return -1;
 }
 
 struct inode *load_inodes(const char *master_file_table) {
     FILE *file = fopen(master_file_table, "rb");
+
     if (!file) {
-        fprintf(stderr, "Failed to open file: %s\n", master_file_table);
+        debug(__func__, "failed to open file:", master_file_table);
         return NULL;
     }
 
@@ -200,6 +274,11 @@ struct inode *load_inodes(const char *master_file_table) {
 
         fread(&name_length, sizeof(uint32_t), 1, file);
         name = malloc(name_length);
+        if (!name){
+            debug(__func__, "failed to allocate memory for name", "");
+            free(name);
+            return NULL;
+        }
         fread(name, sizeof(char), name_length, file);
         fread(&is_directory, sizeof(char), 1, file);
         fread(&is_readonly, sizeof(char), 1, file);
@@ -212,19 +291,22 @@ struct inode *load_inodes(const char *master_file_table) {
 
         fread(&num_entries, sizeof(uint32_t), 1, file);
         entries = malloc(num_entries * sizeof(uintptr_t));
+        if (!entries){
+            debug(__func__, "failed to allocate memory for entries", "");
+            free(entries);
+            return NULL;
+        }
         fread(entries, sizeof(uintptr_t), num_entries, file);
 
-        struct inode *node = malloc(sizeof(struct inode));
-        node->id = id;
-        node->name = name;
-        node->is_directory = is_directory;
-        node->is_readonly = is_readonly;
-        node->filesize = filesize;
-        node->num_entries = num_entries;
-        node->entries = entries;
+        struct inode *node = create_inode(id,name,is_directory,is_readonly,filesize,num_entries,entries);
 
         if (id >= inode_count) {
             inode_map = realloc(inode_map, (id + 1) * sizeof(struct inode *));
+            if (!inode_map){
+                free(inode_map);
+                debug(__func__, "failed to allocate memory for inode map", "");
+                return NULL;
+            }
             memset(inode_map + inode_count, 0, (id + 1 - inode_count) * sizeof(struct inode *));
             inode_count = id + 1;
         }
