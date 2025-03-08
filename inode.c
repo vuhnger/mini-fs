@@ -42,10 +42,75 @@ void save_inodes( const char* master_file_table, struct inode* root )
     return;
 }
 
-struct inode* load_inodes( const char* master_file_table )
-{
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return NULL;
+struct inode *load_inodes(const char *master_file_table) {
+    FILE *file = fopen(master_file_table, "rb");
+    if (!file) {
+        fprintf(stderr, "Failed to open file: %s\n", master_file_table);
+        return NULL;
+    }
+
+    struct inode *root = NULL;
+    struct inode **inode_map = NULL;
+    size_t inode_count = 0;
+
+    while (1) {
+        uint32_t id, name_length, filesize, num_entries;
+        char is_directory, is_readonly;
+        char *name;
+        uintptr_t *entries;
+
+        if (fread(&id, sizeof(uint32_t), 1, file) != 1)
+            break;
+
+        fread(&name_length, sizeof(uint32_t), 1, file);
+        name = malloc(name_length);
+        fread(name, sizeof(char), name_length, file);
+        fread(&is_directory, sizeof(char), 1, file);
+        fread(&is_readonly, sizeof(char), 1, file);
+
+        if (!is_directory) {
+            fread(&filesize, sizeof(uint32_t), 1, file);
+        } else {
+            filesize = 0;
+        }
+
+        fread(&num_entries, sizeof(uint32_t), 1, file);
+        entries = malloc(num_entries * sizeof(uintptr_t));
+        fread(entries, sizeof(uintptr_t), num_entries, file);
+
+        struct inode *node = malloc(sizeof(struct inode));
+        node->id = id;
+        node->name = name;
+        node->is_directory = is_directory;
+        node->is_readonly = is_readonly;
+        node->filesize = filesize;
+        node->num_entries = num_entries;
+        node->entries = entries;
+
+        if (id >= inode_count) {
+            inode_map = realloc(inode_map, (id + 1) * sizeof(struct inode *));
+            memset(inode_map + inode_count, 0, (id + 1 - inode_count) * sizeof(struct inode *));
+            inode_count = id + 1;
+        }
+        inode_map[id] = node;
+
+        if (id == 0) {
+            root = node;
+        }
+    }
+
+    fclose(file);
+
+    for (size_t i = 0; i < inode_count; i++) {
+        struct inode *node = inode_map[i];
+        if (!node || !node->is_directory) continue;
+        for (size_t j = 0; j < node->num_entries; j++) {
+            node->entries[j] = (uintptr_t)inode_map[node->entries[j]];
+        }
+    }
+
+    free(inode_map);
+    return root;
 }
 
 void fs_shutdown( struct inode* inode )
