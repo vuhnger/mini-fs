@@ -6,6 +6,8 @@
 #include <string.h>
 #include <errno.h>
 
+static int MAX_ID = 0;
+
 struct inode* create_file( struct inode* parent, const char* name, char readonly, int size_in_bytes )
 {
     fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
@@ -59,8 +61,12 @@ struct inode *load_inodes(const char *master_file_table) {
         char *name;
         uintptr_t *entries;
 
-        if (fread(&id, sizeof(uint32_t), 1, file) != 1)
+        size_t bytesRead = fread(&id, sizeof(uint32_t), 1, file); 
+
+        if (bytesRead != 1) 
             break;
+        if(id > MAX_ID)
+            MAX_ID = id;
 
         fread(&name_length, sizeof(uint32_t), 1, file);
         name = malloc(name_length);
@@ -113,10 +119,24 @@ struct inode *load_inodes(const char *master_file_table) {
     return root;
 }
 
-void fs_shutdown( struct inode* inode )
+void fs_shutdown(struct inode* inode)
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return;
+    if (!inode)
+    {
+        return;
+    }
+
+    if (inode->is_directory)
+    {
+        for (uint32_t i = 0; i < inode->num_entries; i++)
+        {
+            fs_shutdown((struct inode*)inode->entries[i]);
+        }
+    }
+
+    free(inode->name);
+    free(inode->entries);
+    free(inode);
 }
 
 /* This static variable is used to change the indentation while debug_fs
