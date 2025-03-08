@@ -1,0 +1,110 @@
+$ make test-5-1
+[?2004l[ 66%] Built target create_and_delete
+[ 83%] [34m[1mGenerating make_test_out[0m
+[100%] [34m[1mGenerating create_and_delete_test[0m
+==1897042== Memcheck, a memory error detector
+==1897042== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==1897042== Using Valgrind-3.23.0 and LibVEX; rerun with -h for copyright info
+==1897042== Command: /uio/kant/ifi-ansatt-u07/griff/in2140/in2140-v25-internal/oblig-02/solution/build/create_and_delete /uio/kant/ifi-ansatt-u07/griff/in2140/in2140-v25-internal/oblig-02/solution/test-outputs/master_file_table-create_and_delete /uio/kant/ifi-ansatt-u07/griff/in2140/in2140-v25-internal/oblig-02/solution/test-outputs/block_allocation_table-create_and_delete
+==1897042== 
+Blocks recorded in the block allocation table:
+000: 00000000000000000000
+020: 00000000000000000000
+040: 00000000000000000000
+060: 00000000000000000000
+
+===================================
+= Create a whole filesystem       =
+===================================
+/ (id 0)
+  kernel (id 1 size 20000)
+  etc (id 2)
+    hosts (id 3 size 200)
+  usr (id 4)
+    bin (id 5)
+      ls (id 17 size 14322)
+      ps (id 18 size 13800)
+    local (id 6)
+      bin (id 7)
+        nvcc (id 8 size 28000)
+        gcc (id 9 size 12623)
+  home (id 10)
+    in2140 (id 11)
+      oblig.tgz (id 12 size 15000)
+      oblig (id 13)
+        CMakeLists.txt (id 14 size 5486)
+        inode.c (id 15 size 16988)
+        inode.h (id 16 size 4152)
+Blocks recorded in master file table:
+000: 11111111111111111111
+020: 11111111111111111100
+040: 00000000000000000000
+060: 00000000000000000000
+
+Blocks recorded in the block allocation table:
+000: 11111111111111111111
+020: 11111111111111111100
+040: 00000000000000000000
+060: 00000000000000000000
+
+===================================
+= Deleting some things            =
+===================================
+Trying to delete file gcc from / (should fail)
+Deletion succeeded
+Trying to delete file oblig.tgz from /home/in2140 (should succeed)
+Deletion failed
+Trying to delete file nvcc from /usr/local/bin (should succeed)
+Deletion failed
+Trying to delete directory etc from / (should fail)
+Deletion succeeded
+Trying to delete file hosts from /etc (should succeed)
+Deletion succeeded
+Trying to delete directory etc from / (should succeed)
+Deletion succeeded
+/ (id 0)
+  kernel (id 1 size 20000)
+  etc (id 2)
+    hosts (id 3 size 200)
+  usr (id 4)
+    bin (id 5)
+      ls (id 17 size 14322)
+      ps (id 18 size 13800)
+    local (id 6)
+      bin (id 7)
+        gcc (id 9 size 12623)
+  home (id 10)
+    in2140 (id 11)
+      oblig (id 13)
+        CMakeLists.txt (id 14 size 5486)
+        inode.c (id 15 size 16988)
+        inode.h (id 16 size 4152)
+Blocks recorded in master file table:
+000: 11111100000001111000
+020: 01111111111111111100
+040: 00000000000000000000
+060: 00000000000000000000
+
+Blocks recorded in the block allocation table:
+000: 11111100000001111000
+020: 01111111111111111100
+040: 00000000000000000000
+060: 00000000000000000000
+
+++++++++++++++++++++++++++++++++++++++++++++++++
++ All inodes structures have been
++ deleted. The inode info is stored in
++ /uio/kant/ifi-ansatt-u07/griff/in2140/in2140-v25-internal/oblig-02/solution/test-outputs/master_file_table-create_and_delete
++ The allocated file blocks are stored in
++ /uio/kant/ifi-ansatt-u07/griff/in2140/in2140-v25-internal/oblig-02/solution/test-outputs/block_allocation_table-create_and_delete
+++++++++++++++++++++++++++++++++++++++++++++++++
+==1897042== 
+==1897042== HEAP SUMMARY:
+==1897042==     in use at exit: 0 bytes in 0 blocks
+==1897042==   total heap usage: 83 allocs, 83 frees, 37,377 bytes allocated
+==1897042== 
+==1897042== All heap blocks were freed -- no leaks are possible
+==1897042== 
+==1897042== For lists of detected and suppressed errors, rerun with: -s
+==1897042== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+[100%] Built target test-5-1
