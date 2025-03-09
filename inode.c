@@ -25,6 +25,12 @@ void debug(const char* function_name, const char* message, const char* optional_
     }
 }
 
+
+/*
+Frees the blocks allocated to a node, determined by the number of entries pointed to by the node.
+
+@param node reference to which blocks must be freed
+*/
 void free_all_file_blocks(struct inode* node)
 {
     if (!node || !node->entries)
@@ -35,6 +41,15 @@ void free_all_file_blocks(struct inode* node)
     }
 }
 
+/*
+Frees the memory regions allocated for an inode.
+
+For directories, subdirectories and files are freed recursively.
+
+For files, all dynamically allocated memory properties are freed.
+
+@param node reference the inode that must be freed from memory
+*/
 void free_node(struct inode* node){
     if (!node){
         return;
@@ -51,6 +66,21 @@ void free_node(struct inode* node){
     free(node);
 }
 
+/*
+
+Returns a reference to a new inode.
+
+All properties are read or calculated by data from an Master File Table.
+
+@param id
+@param name
+@param is_directory
+@param is_readonly
+@param filesize
+@param num_entries
+@param entries array of pointers to subdirectories or files
+
+*/
 struct inode* create_inode(
     uint32_t id,
     char* name,
@@ -393,6 +423,12 @@ int delete_dir( struct inode* parent, struct inode* node )
     return 0;
 }
 
+
+/*
+Function genreted by ChatGPT to dump the content of a binary file, used for debugging.
+
+@param filename the name of the file to be dumped
+*/
 void hexdump(const char* filename) {
     FILE *file = fopen(filename, "rb");
     if (!file) {
@@ -435,6 +471,8 @@ void hexdump(const char* filename) {
 
 
 /*
+Helper function to recursively write inode properties to file in order.
+
 @param file Master File Table (MFT) to be written
 @param node reference to node which contents should be written to the MFT
  */
