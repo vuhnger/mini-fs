@@ -407,14 +407,35 @@ void _save_inodes_rec(FILE *file, struct inode* node){
     // + 1 for null terminator '\0'
     uint32_t name_length = strlen(node->name) + 1;
     fwrite(&name_length, sizeof(uint32_t), 1, file);
-    fwrite(&node->name, sizeof(char), name_length, file);
+
+    fwrite(node->name, sizeof(char), name_length, file);
+
     fwrite(&node->is_directory, sizeof(char), 1, file);
     fwrite(&node->is_readonly, sizeof(char), 1, file);
     fwrite(&node->filesize, sizeof(uint32_t), 1, file);
     fwrite(&node->num_entries, sizeof(uint32_t), 1, file);
 
     if (node->num_entries > 0){
-        fwrite(&node->entries, sizeof(uintptr_t), node->num_entries, file);
+        if (node->is_directory) {
+            // For directories, we need to write the IDs of the child nodes
+            uint32_t* child_ids = malloc(node->num_entries * sizeof(uint32_t));
+            if (!child_ids) {
+                debug(__func__, "failed to allocate memory for child IDs", "");
+                return;
+            }
+            
+            for (uint32_t i = 0; i < node->num_entries; i++) {
+                struct inode* child = (struct inode*)node->entries[i];
+                child_ids[i] = child->id;
+            }
+            
+            // Write the IDs, not the pointers
+            fwrite(child_ids, sizeof(uint32_t), node->num_entries, file);
+            free(child_ids);
+        } else {
+            // For files, we can write the block addresses directly
+            fwrite(node->entries, sizeof(uintptr_t), node->num_entries, file);
+        }
     }
 
     if (node->is_directory){
