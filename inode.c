@@ -144,7 +144,7 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     }
 
     // Reallocate space for this file in parent dir entries
-    parent->entries = realloc(parent->entries, sizeof(struct inode) * parent->num_entries+ 1);
+    parent->entries = realloc(parent->entries, sizeof(uintptr_t) * (parent->num_entries + 1));
     if(!parent->entries){
         debug(__func__, "failed to reallocate memory in parent directory", "");
         free(parent->entries);
