@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-void hexdump(const char* filename) {
+void hexdump2(const char* filename) {
     FILE *file = fopen(filename, "rb");
     if (!file) {
         perror("Feil ved åpning av fil for hexdump");
@@ -130,9 +130,9 @@ int main( int argc, char* argv[] )
     debug_fs( root );
     debug_disk();
 
-    hexdump(mft_name);
+    hexdump2(mft_name);
     save_inodes( mft_name, root );
-    hexdump(mft_name);
+    hexdump2(mft_name);
 
     fs_shutdown( root );
 
