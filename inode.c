@@ -150,7 +150,7 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
             free_node((struct inode*) parent->entries[i]);
         }
         // Maybe needed 
-        //free(parent->entries);
+        free(parent->entries);
         return NULL;
     }
     parent->num_entries++;
