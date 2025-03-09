@@ -7,7 +7,7 @@
 #include <errno.h>
 
 // Switch this to 0 to avoid cluttering terminal with print statements
-#define DEBUG_MODE 1
+#define DEBUG_MODE 0
 
 // MAX ID must be incremented AFTER use 
 static int MAX_ID = 0;
@@ -489,7 +489,7 @@ void _save_inodes_rec(FILE *file, struct inode* node){
 
 void save_inodes(const char *master_file_table, struct inode *root)
 {
-    hexdump(master_file_table);
+    if (DEBUG_MODE) hexdump(master_file_table);
     FILE *file = fopen(master_file_table, "wb");
     debug(__func__, "attempting to save to file:", master_file_table);
     if (!file){
@@ -499,7 +499,7 @@ void save_inodes(const char *master_file_table, struct inode *root)
     _save_inodes_rec(file, root);
     debug(__func__, "finish write to file:", master_file_table);
     fclose(file);
-    hexdump(master_file_table);
+    if (DEBUG_MODE) hexdump(master_file_table);
 }
 
 struct inode *load_inodes(const char *master_file_table) {
