@@ -409,6 +409,7 @@ void _save_inodes_rec(FILE *file, struct inode* node){
     fwrite(&name_length, sizeof(uint32_t), 1, file);
 
     fwrite(node->name, sizeof(char), name_length, file);
+    debug(__func__, "wrote (name) to MFT:", node->name);
 
     fwrite(&node->is_directory, sizeof(char), 1, file);
     fwrite(&node->is_readonly, sizeof(char), 1, file);
@@ -417,7 +418,7 @@ void _save_inodes_rec(FILE *file, struct inode* node){
 
     if (node->num_entries > 0){
         if (node->is_directory) {
-            // For directories, we need to write the IDs of the child nodes
+            
             uint32_t* child_ids = malloc(node->num_entries * sizeof(uint32_t));
             if (!child_ids) {
                 debug(__func__, "failed to allocate memory for child IDs", "");
@@ -429,11 +430,10 @@ void _save_inodes_rec(FILE *file, struct inode* node){
                 child_ids[i] = child->id;
             }
             
-            // Write the IDs, not the pointers
             fwrite(child_ids, sizeof(uint32_t), node->num_entries, file);
             free(child_ids);
         } else {
-            // For files, we can write the block addresses directly
+            
             fwrite(node->entries, sizeof(uintptr_t), node->num_entries, file);
         }
     }
