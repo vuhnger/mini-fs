@@ -393,9 +393,47 @@ int delete_dir( struct inode* parent, struct inode* node )
     return 0;
 }
 
+/*
+@param file Master File Table (MFT) to be written
+@param node reference to node which contents should be written to the MFT
+ */
+void _save_inodes_rec(FILE *file, struct inode* node){
+    if (!node){
+        debug(__func__, "failed to write to file: node was null", "");
+        return;
+    }
+
+    fwrite(&node->id, sizeof(uint32_t), 1, file);
+    // + 1 for null terminator '\0'
+    uint32_t name_length = strlen(node->name) + 1;
+    fwrite(&name_length, sizeof(uint32_t), 1, file);
+    fwrite(&node->name, sizeof(char), name_length, file);
+    fwrite(&node->is_directory, sizeof(char), 1, file);
+    fwrite(&node->is_readonly, sizeof(char), 1, file);
+    fwrite(&node->filesize, sizeof(uint32_t), 1, file);
+    fwrite(&node->num_entries, sizeof(uint32_t), 1, file);
+
+    if (node->num_entries > 0){
+        fwrite(&node->entries, sizeof(uintptr_t), node->num_entries, file);
+    }
+
+    if (node->is_directory){
+        for (uint32_t i = 0; i < node->num_entries; i++){
+            _save_inodes_rec(file, (struct inode*) node->entries[i]);
+        }
+    }
+
+}
+
 void save_inodes(const char *master_file_table, struct inode *root)
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
+    FILE *file = fopen(master_file_table, "wb");
+    if (!file){
+        debug(__func__, "failed to open MFT file", "");
+        return;
+    }
+    _save_inodes_rec(file, root);
+    fclose(file);
 }
 
 struct inode *load_inodes(const char *master_file_table) {
