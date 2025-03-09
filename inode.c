@@ -393,6 +393,47 @@ int delete_dir( struct inode* parent, struct inode* node )
     return 0;
 }
 
+void hexdump(const char* filename) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Feil ved åpning av fil for hexdump");
+        return;
+    }
+
+    printf("\n=== Hexdump av %s ===\n", filename);
+    unsigned char buffer[16];  // Leser 16 bytes av gangen
+    size_t bytesRead;
+    size_t offset = 0; // For å vise posisjon i filen
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        printf("%08zx  ", offset); // Utskrift av offset i hex
+
+        // Skriv ut hex-verdier
+        for (size_t i = 0; i < bytesRead; i++) {
+            printf("%02x ", buffer[i]);
+            if (i == 7) printf(" "); // Ekstra mellomrom midt i linjen
+        }
+
+        // Fyll inn mellomrom hvis det er færre enn 16 bytes lest
+        for (size_t i = bytesRead; i < 16; i++) {
+            printf("   ");
+            if (i == 7) printf(" ");
+        }
+
+        // Skriv ut ASCII-tegnene ved siden av
+        printf(" |");
+        for (size_t i = 0; i < bytesRead; i++) {
+            printf("%c", (buffer[i] >= 32 && buffer[i] <= 126) ? buffer[i] : '.');
+        }
+        printf("|\n");
+
+        offset += bytesRead;
+    }
+
+    fclose(file);
+}
+
+
 /*
 @param file Master File Table (MFT) to be written
 @param node reference to node which contents should be written to the MFT
@@ -448,13 +489,17 @@ void _save_inodes_rec(FILE *file, struct inode* node){
 
 void save_inodes(const char *master_file_table, struct inode *root)
 {
+    hexdump(master_file_table);
     FILE *file = fopen(master_file_table, "wb");
+    debug(__func__, "attempting to save to file:", master_file_table);
     if (!file){
         debug(__func__, "failed to open MFT file", "");
         return;
     }
     _save_inodes_rec(file, root);
+    debug(__func__, "finish write to file:", master_file_table);
     fclose(file);
+    hexdump(master_file_table);
 }
 
 struct inode *load_inodes(const char *master_file_table) {
