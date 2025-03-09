@@ -345,6 +345,19 @@ int delete_dir( struct inode* parent, struct inode* node )
         return -1;
     }
     
+    int dir_index = -1;
+    for (int i = 0; i < parent->num_entries; i++) {
+        if ((uintptr_t)node == parent->entries[i]) {
+            dir_index = i;
+            break;
+        }
+    }
+    
+    if (dir_index == -1) {
+        debug(__func__, "aborting dir deletion: directory not found in parent", "");
+        return -1;
+    }
+
     // Loop over all entries and call delete_file or delete_dir
     for (uint32_t i = 0; i < node->num_entries; i++){
         // Delete all files from a directory before calling delete_dir recursively to delete any files in subdirectories etc.
@@ -355,8 +368,28 @@ int delete_dir( struct inode* parent, struct inode* node )
             delete_dir(node, (struct inode*) child);
         }
     }
-    // Free all memory items related to the deleted node
-    //free_node(node);
+    
+
+    for (int i = dir_index; i < parent->num_entries - 1; i++) {
+        parent->entries[i] = parent->entries[i + 1];
+    }
+    --parent->num_entries;
+
+
+    free(node->entries);
+    free(node->name);
+    free(node);
+
+    
+    if (parent->num_entries > 0) {
+        uintptr_t* new_entries = realloc(parent->entries, parent->num_entries * sizeof(uintptr_t));
+        if (new_entries) {
+            parent->entries = new_entries;
+        }
+    } else {
+        free(parent->entries);
+        parent->entries = NULL;
+    }
     return 0;
 }
 
