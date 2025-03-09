@@ -465,9 +465,7 @@ void fs_shutdown(struct inode* inode)
         }
     }
 
-    free(inode->name);
-    free(inode->entries);
-    free(inode);
+    free_node(inode);
 }
 
 /* This static variable is used to change the indentation while 
