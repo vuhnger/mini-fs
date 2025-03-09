@@ -12,6 +12,13 @@
 // MAX ID must be incremented AFTER use 
 static int MAX_ID = 0;
 
+/* 
+ * Prints a debug message with the function name.
+ * 
+ * @param function_name The name of the function calling debug.
+ * @param message The debug message to print.
+ * @param optional additional information, pass "" as default arg
+ */
 void debug(const char* function_name, const char* message, const char* optional_string) {
     if (DEBUG_MODE){
         fprintf(stderr, "[DEBUG] %s: %s %s\n", function_name, message, optional_string);
@@ -36,7 +43,7 @@ void free_node(struct inode* node){
         for (uint32_t i = 0; i < node->num_entries; i++){
             free_node((struct inode*) node->entries[i]);
         }
-    } else {
+    }else{
         free_all_file_blocks(node);
     }
     free(node->entries);
@@ -53,9 +60,11 @@ struct inode* create_inode(
     uint32_t num_entries,
     uintptr_t* entries
 ){
+    // Create the inode to be inserted
     struct inode* node = malloc(sizeof(struct inode));
     if (!node) {
         debug(__func__, "failed to allocate memory for new node", "");
+        //free(node);
         return NULL;
     }
     
@@ -74,7 +83,8 @@ struct inode* create_inode(
     return node;
 }
 
-struct inode* create_file(struct inode* parent, const char* name, char readonly, int size_in_bytes)
+
+struct inode* create_file( struct inode* parent, const char* name, char readonly, int size_in_bytes )
 {
     debug(__func__, "attempting to create file:", name);
 
@@ -88,32 +98,39 @@ struct inode* create_file(struct inode* parent, const char* name, char readonly,
         return NULL;
     }
 
-    // Check if file name exists
+    // Check if there already exists a file with the new name in the current directory
     if (find_inode_by_name(parent, name)){
         debug(__func__, "entry with (name) already exists", name);
         return NULL;
     }
 
+    // Duplicate name to adjust the data type to match constructor of an inode
     char* new_file_name = strdup(name);
     if (!new_file_name){
         debug(__func__, "failed to allocate memory for file name", "");
+        //free(new_file_name);
         return NULL;
     }
 
+    struct inode* node;
+
+    // Allocate memory for entries
+
+    // Calculcate the number of blocks needed to store the file
     int blocks_needed = (size_in_bytes + 4095) / 4096;
 
-    struct inode* node = create_inode(MAX_ID, new_file_name, 0, readonly, size_in_bytes, blocks_needed, NULL);
+    
+    node = create_inode(MAX_ID, new_file_name,0,readonly,size_in_bytes,blocks_needed,NULL);
     ++MAX_ID;
 
-    // allocate entries
+    // Allocate memory for entries
     node->entries = malloc(sizeof(uintptr_t) * blocks_needed);
     if (!node->entries){
         debug(__func__, "failed to allocate memory for new file","");
-        free_node(node); // this frees node->name and node
+        free_node(node);
         return NULL;
     }
 
-    // allocate blocks
     for (int i = 0; i < blocks_needed; i++){
         int block = allocate_block(1);
         if (block == -1){
@@ -125,43 +142,43 @@ struct inode* create_file(struct inode* parent, const char* name, char readonly,
         node->entries[i] = block;
     }
 
-    // Safely realloc parent's entries
-    uintptr_t* temp = realloc(parent->entries, sizeof(uintptr_t) * (parent->num_entries + 1));
-    if (!temp) {
+    // Reallocate space for this file in parent dir entries
+    parent->entries = realloc(parent->entries, sizeof(uintptr_t) * (parent->num_entries + 1));
+    if(!parent->entries){
         debug(__func__, "failed to reallocate memory in parent directory", "");
-        // We still own parent->entries if realloc fails
-        free_node(node);
         return NULL;
     }
-    parent->entries = temp;
-
-    // add new file to parent's entries
-    parent->entries[parent->num_entries] = (uintptr_t) node;
     parent->num_entries++;
+
+    parent->entries[parent->num_entries - 1] = (uintptr_t) node;
 
     debug(__func__, "created file: ", name);
     return node;
 }
 
-struct inode* create_dir(struct inode* parent, const char* name)
+struct inode* create_dir( struct inode* parent, const char* name )
 {
     debug(__func__, "attempting directory creation: ", name);
 
+    struct inode* node;
+
+    // Duplicate name to adjust the data type to match constructor of an inode
     char* new_dir_name = strdup(name);
     if (!new_dir_name){
         debug(__func__, "failed to allocate memory for directory name", "");
+        //free(new_dir_name);
         return NULL;
     }
 
-    // If no parent => root
+    // Check if directory is root
     if (!parent){
         debug(__func__, "parent pointer was NULL", "");
-        struct inode* node = create_inode(MAX_ID, new_dir_name, 1, 0, 0, 0, NULL);
+        node = create_inode(MAX_ID, new_dir_name, 1,0,0,0,NULL);
         MAX_ID++;
         if (!node){
+            //free(node);
             debug(__func__, "failed to create root node", "");
             --MAX_ID;
-            free(new_dir_name);
             return NULL;
         }
         return node;
@@ -169,30 +186,37 @@ struct inode* create_dir(struct inode* parent, const char* name)
 
     if (!parent->is_directory){
         debug(__func__, "parent pointer is not a directory", "");
-        free(new_dir_name);
         return NULL;  
     }
 
-    // Check if exists
+    // Check if there already exists a directory or file with the new name in the current directory
     if (find_inode_by_name(parent, name)){
         debug(__func__, "entry with (name) already exists", name);
-        free(new_dir_name);
         return NULL;
     }
 
-    // Realloc parent's entries
-    parent->num_entries++;
-    uintptr_t* tmp = realloc(parent->entries, sizeof(uintptr_t) * parent->num_entries);
-    if (!tmp){
+    // Allocate memory for new directory
+    // Calculated as: size of current dir + size of new dir + 1
+    
+    // Check whether num_entries has been initialized
+    // Update the number of entries to reflect a new dir added
+    ++parent->num_entries;
+    uintptr_t* new_entries = realloc(parent->entries, sizeof(uintptr_t) * parent->num_entries);
+    //TODO: Must free the realloc if it fails
+    
+    if (!new_entries){
+        // If memory reallocation fails, the count should not be increased because no dir was added
         --parent->num_entries;
         debug(__func__, "memory allocation for new_entries failed", "");
-        free(new_dir_name);
         return NULL;
     }
-    parent->entries = tmp;
+    parent->entries = new_entries;
 
-    // create the node
-    struct inode* node = create_inode(MAX_ID, new_dir_name, 1, 0, 0, 0, NULL);
+    
+    // Create the new node
+    node = create_inode(MAX_ID,new_dir_name,1,0,0,0,NULL);
+    
+    // Increment the max id 
     ++MAX_ID;
     if (!node){
         free(new_dir_name);
@@ -201,41 +225,59 @@ struct inode* create_dir(struct inode* parent, const char* name)
         debug(__func__, "memory allocation for new_node failed", "");
         return NULL;
     }
-
+    // Add a pointer to the new dir from parent dir
     parent->entries[parent->num_entries - 1] = (uintptr_t) node;
 
     debug(__func__, "created directory: ", name);
     return node;
+
 }
 
-struct inode* find_inode_by_name(struct inode* parent, const char* name)
+
+
+struct inode *find_inode_by_name(struct inode *parent, const char *name)
 {
-    if (!parent || !parent->is_directory) {
+
+    if (!parent)
+    {
+        return NULL;
+    }
+    if (!(parent->is_directory))
+    {
         return NULL;
     }
 
-    for (int i = 0; i < parent->num_entries; i++){
-        struct inode* child = (struct inode*)parent->entries[i];
-        if (strcmp(child->name, name) == 0){
+    for (int i = 0; i < parent->num_entries; i++)
+    {
+        struct inode *child = (struct inode *)parent->entries[i];
+        if (strcmp(child->name, name) == 0)
+        {
             fprintf(stderr, "name:%s\nchild name:%s\n", child->name, name);
             return child;
         }
     }
+
+    // fprintf(stderr, "%s is not implemented\n", __FUNCTION__);
     return NULL;
 }
 
 int delete_file(struct inode* parent, struct inode* node)
 {
-    if (!parent || !node) {
-        debug(__func__, "aborting file deletion: invalid ptrs", "");
+    
+    if (!parent) {
+        debug(__func__, "aborting file deletion: parent pointer was null", "");
+        return -1;
+    }
+    if (!node) {
+        debug(__func__, "aborting file deletion: file is null", "");
         return -1;
     }
     if (node->is_directory) {
-        debug(__func__, "aborting file deletion: node is directory", node->name);
+        debug(__func__, "aborting file deletion: node is a directory", node->name);
         return -1;
     }
     if (!parent->is_directory) {
-        debug(__func__, "aborting file deletion: parent not directory", "");
+        debug(__func__, "aborting file deletion: parent is not a directory", "");
         return -1;
     }
 
@@ -246,127 +288,86 @@ int delete_file(struct inode* parent, struct inode* node)
             break;
         }
     }
+    
     if (file_index == -1) {
-        debug(__func__, "aborting file deletion: file not found", "");
+        debug(__func__, "aborting file deletion: file not found in parent directory", "");
         return -1;
     }
 
-    // free blocks
+    
     for (int i = 0; i < node->num_entries; i++) {
         int result = free_block(node->entries[i]);
         if (result == -1) {
             debug(__func__, "warning: failed to free block", "");
-            // not returning is optional, but might leak
+            return -1;
         }
     }
 
-    // shift array down
     for (int i = file_index; i < parent->num_entries - 1; i++){
         parent->entries[i] = parent->entries[i + 1];
     }
-    parent->num_entries--;
-
-    // free the inode
+    --parent->num_entries;
+    
     free_node(node);
 
-    // safe realloc
-    if (parent->num_entries > 0) {
-        uintptr_t* tmp = realloc(parent->entries, parent->num_entries * sizeof(uintptr_t));
-        if (!tmp){
-            debug(__func__, "failed to reallocate memory for entry array", "");
-            // parent->entries remains valid if tmp is NULL
-            return -1;
-        }
-        parent->entries = tmp;
-    } else {
-        // if no entries remain, we can free or keep it as a 0-length array
-        free(parent->entries);
-        parent->entries = NULL;
+    uintptr_t *new_entries = realloc(parent->entries, parent->num_entries * sizeof(uintptr_t));
+    if (!new_entries){
+        debug(__func__, "failed to reallocate memory for entry array", "");
+        //free(new_entries);
+        return -1;
     }
+    parent->entries = new_entries;
 
     debug(__func__, "file deleted successfully", "");
     return 0;
 }
 
-int delete_dir(struct inode* parent, struct inode* node)
+int delete_dir( struct inode* parent, struct inode* node )
 {
+    
     if (!node){
         debug(__func__, "aborting dir deletion: node was null", "");
         return -1;
     }
-    if (!node->is_directory) {
-        debug(__func__, "aborting dir deletion: node is not directory", node->name);
-        return -1;
-    }
-
-    // If node is root
+    // Check if the dir is root, in that case delete it
     if (!parent){
         free_node(node);
         debug(__func__, "freeing root directory", "");
         return 0;
     }
 
+    if (!node->is_directory) {
+        debug(__func__, "aborting dir deletion: node is a directory", node->name);
+        return -1;
+    }
     if (!parent->is_directory) {
-        debug(__func__, "aborting dir deletion: parent is not directory", "");
+        debug(__func__, "aborting dir deletion: parent is not a directory", "");
         return -1;
     }
-
-    // Recurse on children
+    
+    // Loop over all entries and call delete_file or delete_dir
     for (uint32_t i = 0; i < node->num_entries; i++){
-        struct inode* child = (struct inode*) node->entries[i];
-        if (child->is_directory) {
-            delete_dir(node, child);
-        } else {
-            delete_file(node, child);
+        // Delete all files from a directory before calling delete_dir recursively to delete any files in subdirectories etc.
+        uintptr_t child = node->entries[i];
+        if (!((struct inode*) child)->is_directory){
+            delete_file(node, (struct inode*) child);
+        }else{
+            delete_dir(node, (struct inode*) child);
         }
     }
-    // Do not forget to remove 'node' from parent's entry array
-    // (Similar approach to delete_file)
-
-    // Find index in parent's array
-    int dir_index = -1;
-    for (int i = 0; i < parent->num_entries; i++){
-        if ((struct inode*)parent->entries[i] == node){
-            dir_index = i;
-            break;
-        }
-    }
-    if (dir_index == -1) {
-        debug(__func__, "dir not found in parent->entries", node->name);
-        return -1;
-    }
-
-    // shift array
-    for (int i = dir_index; i < parent->num_entries - 1; i++){
-        parent->entries[i] = parent->entries[i + 1];
-    }
-    parent->num_entries--;
-
-    free_node(node); // now node and its contents are freed
-
-    // safe realloc
-    if (parent->num_entries > 0) {
-        uintptr_t* tmp = realloc(parent->entries, parent->num_entries * sizeof(uintptr_t));
-        if (!tmp) {
-            debug(__func__, "failed to reallocate parent's entries array", "");
-            return -1;
-        }
-        parent->entries = tmp;
-    } else {
-        free(parent->entries);
-        parent->entries = NULL;
-    }
+    // Free all memory items related to the deleted node
+    //free_node(node);
     return 0;
 }
 
 void save_inodes(const char *master_file_table, struct inode *root)
 {
-    fprintf(stderr, "%s is not implemented\n", __FUNCTION__);
+    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
 }
 
-struct inode *load_inodes(const char *master_file_table) 
-{
+struct inode *load_inodes(const char *master_file_table) {
     FILE *file = fopen(master_file_table, "rb");
+
     if (!file) {
         debug(__func__, "failed to open file:", master_file_table);
         return NULL;
@@ -383,23 +384,22 @@ struct inode *load_inodes(const char *master_file_table)
         uintptr_t *entries;
 
         size_t bytesRead = fread(&id, sizeof(uint32_t), 1, file); 
-        if (bytesRead != 1) {
+
+        if (bytesRead != 1) 
             break;
-        }
-        if (id > MAX_ID) {
+        if(id > MAX_ID)
             MAX_ID = id;
-        }
 
         fread(&name_length, sizeof(uint32_t), 1, file);
         name = malloc(name_length);
         if (!name){
             debug(__func__, "failed to allocate memory for name", "");
-            fclose(file);
+            //free(name);
             return NULL;
         }
         fread(name, sizeof(char), name_length, file);
         fread(&is_directory, sizeof(char), 1, file);
-        fread(&is_readonly,  sizeof(char), 1, file);
+        fread(&is_readonly, sizeof(char), 1, file);
 
         if (!is_directory) {
             fread(&filesize, sizeof(uint32_t), 1, file);
@@ -412,27 +412,20 @@ struct inode *load_inodes(const char *master_file_table)
         if (!entries){
             debug(__func__, "failed to allocate memory for entries", "");
             free(name);
-            fclose(file);
             return NULL;
         }
         fread(entries, sizeof(uintptr_t), num_entries, file);
 
         debug(__func__, "loading inode", name);
-        struct inode *node = create_inode(id, name, is_directory, is_readonly, filesize, num_entries, entries);
+        struct inode *node = create_inode(id,name,is_directory,is_readonly,filesize,num_entries,entries);
 
-        // Safe reallocation for the inode_map
         if (id >= inode_count) {
-            struct inode** tmp_map = realloc(inode_map, (id + 1) * sizeof(struct inode *));
-            if (!tmp_map){
+            inode_map = realloc(inode_map, (id + 1) * sizeof(struct inode *));
+            if (!inode_map){
+                free(inode_map);
                 debug(__func__, "failed to allocate memory for inode map", "");
-                // We still have inode_map
-                free(node);  // partial cleanup
-                free(entries);
-                free(name);
-                fclose(file);
                 return NULL;
             }
-            inode_map = tmp_map;
             memset(inode_map + inode_count, 0, (id + 1 - inode_count) * sizeof(struct inode *));
             inode_count = id + 1;
         }
@@ -445,7 +438,6 @@ struct inode *load_inodes(const char *master_file_table)
 
     fclose(file);
 
-    // Fix up directory pointers
     for (size_t i = 0; i < inode_count; i++) {
         struct inode *node = inode_map[i];
         if (!node || !node->is_directory) continue;
@@ -460,12 +452,15 @@ struct inode *load_inodes(const char *master_file_table)
 
 void fs_shutdown(struct inode* inode)
 {
-    if (!inode) {
+    if (!inode)
+    {
         return;
     }
 
-    if (inode->is_directory) {
-        for (uint32_t i = 0; i < inode->num_entries; i++) {
+    if (inode->is_directory)
+    {
+        for (uint32_t i = 0; i < inode->num_entries; i++)
+        {
             fs_shutdown((struct inode*)inode->entries[i]);
         }
     }
@@ -475,8 +470,11 @@ void fs_shutdown(struct inode* inode)
     free(inode);
 }
 
-/* Debug FS */
+/* This static variable is used to change the indentation while 
+ * is walking through the tree of inodes and prints information.
+ */
 static int indent = 0;
+
 static void debug_fs_print_table( const char* table );
 static void debug_fs_tree_walk( struct inode* node, char* table );
 
@@ -490,36 +488,48 @@ void debug_fs( struct inode* node )
 
 static void debug_fs_tree_walk( struct inode* node, char* table )
 {
-    if (!node) return;
-    for (int i=0; i<indent; i++)
+    if( node == NULL ) return;
+    for( int i=0; i<indent; i++ )
         printf("  ");
-    if (node->is_directory) {
+    if( node->is_directory )
+    {
         printf("%s (id %d)\n", node->name, node->id );
         indent++;
-        for (int i=0; i<node->num_entries; i++){
+        for( int i=0; i<node->num_entries; i++ )
+        {
             struct inode* child = (struct inode*)node->entries[i];
             debug_fs_tree_walk( child, table );
         }
         indent--;
-    } else {
+    }
+    else
+    {
         printf("%s (id %d size %d)\n", node->name, node->id, node->filesize );
 
-        /* Ugly extents approach (left as-is) */
+        /* The following is an ugly solution. We expect you to discover a
+         * better way of handling extents in the node->entries array, and did
+         * it like this because we don't want to give away a good solution here.
+         */
         uint32_t* extents = (uint32_t*)node->entries;
-        for (int i=0; i<node->num_entries; i++){
-            for (int j=0; j<extents[2*i+1]; j++){
+
+        for( int i=0; i<node->num_entries; i++ )
+        {
+            for( int j=0; j<extents[2*i+1]; j++ )
+            {
                 table[ extents[2*i]+j ] = 1;
             }
         }
     }
 }
 
-static void debug_fs_print_table(const char* table)
+static void debug_fs_print_table( const char* table )
 {
     printf("Blocks recorded in master file table:");
-    for (int i=0; i<NUM_BLOCKS; i++){
-        if (i % 20 == 0) printf("\n%03d: ", i);
-        printf("%d", table[i]);
+    for( int i=0; i<NUM_BLOCKS; i++ )
+    {
+        if( i % 20 == 0 ) printf("\n%03d: ", i);
+        printf("%d", table[i] );
     }
     printf("\n\n");
 }
+
