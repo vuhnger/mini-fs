@@ -7,7 +7,7 @@
 #include <errno.h>
 
 // Switch this to 0 to avoid cluttering terminal with print statements
-#define DEBUG_MODE 0
+#define DEBUG_MODE 1
 
 // MAX ID must be incremented AFTER use 
 static int MAX_ID = 0;
