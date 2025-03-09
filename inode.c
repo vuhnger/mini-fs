@@ -356,7 +356,7 @@ int delete_dir( struct inode* parent, struct inode* node )
         }
     }
     // Free all memory items related to the deleted node
-    //free_node(node);
+    free_node(node);
     return 0;
 }
 
