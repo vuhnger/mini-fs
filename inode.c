@@ -146,11 +146,6 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     parent->entries = realloc(parent->entries, sizeof(uintptr_t) * (parent->num_entries + 1));
     if(!parent->entries){
         debug(__func__, "failed to reallocate memory in parent directory", "");
-        for (uint32_t i = 0; i < parent->num_entries; i++){
-            free_node((struct inode*) parent->entries[i]);
-        }
-        // Maybe needed 
-        free(parent->entries);
         return NULL;
     }
     parent->num_entries++;
@@ -171,7 +166,7 @@ struct inode* create_dir( struct inode* parent, const char* name )
     char* new_dir_name = strdup(name);
     if (!new_dir_name){
         debug(__func__, "failed to allocate memory for directory name", "");
-        free(new_dir_name);
+        //free(new_dir_name);
         return NULL;
     }
 
@@ -181,7 +176,7 @@ struct inode* create_dir( struct inode* parent, const char* name )
         node = create_inode(MAX_ID, new_dir_name, 1,0,0,0,NULL);
         MAX_ID++;
         if (!node){
-            free(node);
+            //free(node);
             debug(__func__, "failed to create root node", "");
             --MAX_ID;
             return NULL;
@@ -416,7 +411,7 @@ struct inode *load_inodes(const char *master_file_table) {
         entries = malloc(num_entries * sizeof(uintptr_t));
         if (!entries){
             debug(__func__, "failed to allocate memory for entries", "");
-            //free(entries);
+            free(name);
             return NULL;
         }
         fread(entries, sizeof(uintptr_t), num_entries, file);
