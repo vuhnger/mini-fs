@@ -252,7 +252,7 @@ struct inode *find_inode_by_name(struct inode *parent, const char *name)
         struct inode *child = (struct inode *)parent->entries[i];
         if (strcmp(child->name, name) == 0)
         {
-            fprintf(stderr, "name:%s\nchild name:%s\n", child->name, name);
+            //fprintf(stderr, "name:%s\nchild name:%s\n", child->name, name);
             return child;
         }
     }
