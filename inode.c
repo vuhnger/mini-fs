@@ -25,6 +25,32 @@ void debug(const char* function_name, const char* message, const char* optional_
     }
 }
 
+void free_all_file_blocks(struct inode* node)
+{
+    if (!node || !node->entries)
+        return;
+
+    for (uint32_t i = 0; i < node->num_entries; i++) {
+        free_block(node->entries[i]);
+    }
+}
+
+void free_node(struct inode* node){
+    if (!node){
+        return;
+    }
+    if (node->is_directory){
+        for (uint32_t i = 0; i < node->num_entries; i++){
+            free_node((struct inode*) node->entries[i]);
+        }
+    }else{
+        free_all_file_blocks(node);
+    }
+    free(node->entries);
+    free(node->name);
+    free(node);
+}
+
 struct inode* create_inode(
     uint32_t id,
     char* name,
@@ -101,7 +127,8 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     node->entries = malloc(sizeof(uintptr_t) * blocks_needed);
     if (!node->entries){
         debug(__func__, "failed to allocate memory for new file","");
-        free(node->entries);
+        free_node(node);
+        free(new_file_name);
         return NULL;
     }
 
@@ -110,6 +137,7 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
         if (block == -1){
             debug(__func__, "failed to allocate memory for block", "");
             free_block(1);
+            free_node(node);
             return NULL;
         }
         node->entries[i] = block;
@@ -120,6 +148,7 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     if(!parent->entries){
         debug(__func__, "failed to reallocate memory in parent directory", "");
         free(parent->entries);
+        free(new_file_name);
         return NULL;
     }
     parent->num_entries++;
