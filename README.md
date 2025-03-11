@@ -45,8 +45,4 @@ The project contains no errors and no memory leaks when running the test scripts
 
 For files:
 Treat each 64-bit entry as two 32-bit values representing a disk block and the extent. This would mean reading 32 bits twice to get the block_no and extent for a file. We feed the extent size into `allocate_block` to allocate the corresponding number of blocks. This would necessitate updating the deleting functions to also free the allocated blocks. 
-### save_inodes not writing to MFT
-The MFT is being overwritten, this is verified by implementing a custom hex-dump function that dumps the content of a binary file. Upon running the hex-dump after load_inodes is called, the content of the MFT is being updated.
-
-However, the MFT dump done by the test scripts prints an empty table containing no blocks. 
 
