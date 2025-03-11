@@ -7,7 +7,7 @@
 #include <errno.h>
 
 // Switch this to 0 to avoid cluttering terminal with print statements
-#define DEBUG_MODE 1
+#define DEBUG_MODE 0
 
 // MAX ID must be incremented AFTER use 
 static int MAX_ID = 0;
@@ -25,6 +25,62 @@ void debug(const char* function_name, const char* message, const char* optional_
     }
 }
 
+
+/*
+Frees the blocks allocated to a node, determined by the number of entries pointed to by the node.
+
+@param node reference to which blocks must be freed
+*/
+void free_all_file_blocks(struct inode* node)
+{
+    if (!node || !node->entries)
+        return;
+
+    for (uint32_t i = 0; i < node->num_entries; i++) {
+        free_block(node->entries[i]);
+    }
+}
+
+/*
+Frees the memory regions allocated for an inode.
+
+For directories, subdirectories and files are freed recursively.
+
+For files, all dynamically allocated memory properties are freed.
+
+@param node reference the inode that must be freed from memory
+*/
+void free_node(struct inode* node){
+    if (!node){
+        return;
+    }
+    if (node->is_directory){
+        for (uint32_t i = 0; i < node->num_entries; i++){
+            free_node((struct inode*) node->entries[i]);
+        }
+    }else{
+        free_all_file_blocks(node);
+    }
+    free(node->entries);
+    free(node->name);
+    free(node);
+}
+
+/*
+
+Returns a reference to a new inode.
+
+All properties are read or calculated by data from an Master File Table.
+
+@param id
+@param name
+@param is_directory
+@param is_readonly
+@param filesize
+@param num_entries
+@param entries array of pointers to subdirectories or files
+
+*/
 struct inode* create_inode(
     uint32_t id,
     char* name,
@@ -38,7 +94,7 @@ struct inode* create_inode(
     struct inode* node = malloc(sizeof(struct inode));
     if (!node) {
         debug(__func__, "failed to allocate memory for new node", "");
-        free(node);
+        //free(node);
         return NULL;
     }
     
@@ -82,7 +138,7 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     char* new_file_name = strdup(name);
     if (!new_file_name){
         debug(__func__, "failed to allocate memory for file name", "");
-        free(new_file_name);
+        //free(new_file_name);
         return NULL;
     }
 
@@ -101,7 +157,7 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
     node->entries = malloc(sizeof(uintptr_t) * blocks_needed);
     if (!node->entries){
         debug(__func__, "failed to allocate memory for new file","");
-        free(node->entries);
+        free_node(node);
         return NULL;
     }
 
@@ -110,16 +166,16 @@ struct inode* create_file( struct inode* parent, const char* name, char readonly
         if (block == -1){
             debug(__func__, "failed to allocate memory for block", "");
             free_block(1);
+            free_node(node);
             return NULL;
         }
         node->entries[i] = block;
     }
 
     // Reallocate space for this file in parent dir entries
-    parent->entries = realloc(parent->entries, sizeof(struct inode) * parent->num_entries+ 1);
+    parent->entries = realloc(parent->entries, sizeof(uintptr_t) * (parent->num_entries + 1));
     if(!parent->entries){
         debug(__func__, "failed to reallocate memory in parent directory", "");
-        free(parent->entries);
         return NULL;
     }
     parent->num_entries++;
@@ -140,7 +196,7 @@ struct inode* create_dir( struct inode* parent, const char* name )
     char* new_dir_name = strdup(name);
     if (!new_dir_name){
         debug(__func__, "failed to allocate memory for directory name", "");
-        free(new_dir_name);
+        //free(new_dir_name);
         return NULL;
     }
 
@@ -150,7 +206,7 @@ struct inode* create_dir( struct inode* parent, const char* name )
         node = create_inode(MAX_ID, new_dir_name, 1,0,0,0,NULL);
         MAX_ID++;
         if (!node){
-            free(node);
+            //free(node);
             debug(__func__, "failed to create root node", "");
             --MAX_ID;
             return NULL;
@@ -226,7 +282,7 @@ struct inode *find_inode_by_name(struct inode *parent, const char *name)
         struct inode *child = (struct inode *)parent->entries[i];
         if (strcmp(child->name, name) == 0)
         {
-            fprintf(stderr, "name:%s\nchild name:%s\n", child->name, name);
+            //fprintf(stderr, "name:%s\nchild name:%s\n", child->name, name);
             return child;
         }
     }
@@ -277,23 +333,20 @@ int delete_file(struct inode* parent, struct inode* node)
         }
     }
 
-    for (int i = file_index; i < node->num_entries - 1; i++){
+    for (int i = file_index; i < parent->num_entries - 1; i++){
         parent->entries[i] = parent->entries[i + 1];
     }
     --parent->num_entries;
     
-    free(node->name);
-    free(node->entries);
-    free(node);
+    free_node(node);
 
     uintptr_t *new_entries = realloc(parent->entries, parent->num_entries * sizeof(uintptr_t));
     if (!new_entries){
         debug(__func__, "failed to reallocate memory for entry array", "");
-        free(new_entries);
+        //free(new_entries);
         return -1;
     }
     parent->entries = new_entries;
-   
 
     debug(__func__, "file deleted successfully", "");
     return 0;
@@ -301,13 +354,190 @@ int delete_file(struct inode* parent, struct inode* node)
 
 int delete_dir( struct inode* parent, struct inode* node )
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
-    return -1;
+    
+    if (!node){
+        debug(__func__, "aborting dir deletion: node was null", "");
+        return -1;
+    }
+    // Check if the dir is root, in that case delete it
+    if (!parent){
+        free_node(node);
+        debug(__func__, "freeing root directory", "");
+        return 0;
+    }
+
+    if (!node->is_directory) {
+        debug(__func__, "aborting dir deletion: node is a directory", node->name);
+        return -1;
+    }
+    if (!parent->is_directory) {
+        debug(__func__, "aborting dir deletion: parent is not a directory", "");
+        return -1;
+    }
+    
+    int dir_index = -1;
+    for (int i = 0; i < parent->num_entries; i++) {
+        if ((uintptr_t)node == parent->entries[i]) {
+            dir_index = i;
+            break;
+        }
+    }
+    
+    if (dir_index == -1) {
+        debug(__func__, "aborting dir deletion: directory not found in parent", "");
+        return -1;
+    }
+
+    // Loop over all entries and call delete_file or delete_dir
+    for (uint32_t i = 0; i < node->num_entries; i++){
+        // Delete all files from a directory before calling delete_dir recursively to delete any files in subdirectories etc.
+        uintptr_t child = node->entries[i];
+        if (!((struct inode*) child)->is_directory){
+            delete_file(node, (struct inode*) child);
+        }else{
+            delete_dir(node, (struct inode*) child);
+        }
+    }
+    
+
+    for (int i = dir_index; i < parent->num_entries - 1; i++) {
+        parent->entries[i] = parent->entries[i + 1];
+    }
+    --parent->num_entries;
+
+
+    free(node->entries);
+    free(node->name);
+    free(node);
+
+    
+    if (parent->num_entries > 0) {
+        uintptr_t* new_entries = realloc(parent->entries, parent->num_entries * sizeof(uintptr_t));
+        if (new_entries) {
+            parent->entries = new_entries;
+        }
+    } else {
+        free(parent->entries);
+        parent->entries = NULL;
+    }
+    return 0;
+}
+
+
+/*
+Function genreted by ChatGPT to dump the content of a binary file, used for debugging.
+
+@param filename the name of the file to be dumped
+*/
+void hexdump(const char* filename) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Feil ved åpning av fil for hexdump");
+        return;
+    }
+
+    printf("\n=== Hexdump av %s ===\n", filename);
+    unsigned char buffer[16];  // Leser 16 bytes av gangen
+    size_t bytesRead;
+    size_t offset = 0; // For å vise posisjon i filen
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        printf("%08zx  ", offset); // Utskrift av offset i hex
+
+        // Skriv ut hex-verdier
+        for (size_t i = 0; i < bytesRead; i++) {
+            printf("%02x ", buffer[i]);
+            if (i == 7) printf(" "); // Ekstra mellomrom midt i linjen
+        }
+
+        // Fyll inn mellomrom hvis det er færre enn 16 bytes lest
+        for (size_t i = bytesRead; i < 16; i++) {
+            printf("   ");
+            if (i == 7) printf(" ");
+        }
+
+        // Skriv ut ASCII-tegnene ved siden av
+        printf(" |");
+        for (size_t i = 0; i < bytesRead; i++) {
+            printf("%c", (buffer[i] >= 32 && buffer[i] <= 126) ? buffer[i] : '.');
+        }
+        printf("|\n");
+
+        offset += bytesRead;
+    }
+
+    fclose(file);
+}
+
+
+/*
+Helper function to recursively write inode properties to file in order.
+
+@param file Master File Table (MFT) to be written
+@param node reference to node which contents should be written to the MFT
+ */
+void _save_inodes_rec(FILE *file, struct inode* node){
+    if (!node){
+        debug(__func__, "failed to write to file: node was null", "");
+        return;
+    }
+
+    fwrite(&node->id, sizeof(uint32_t), 1, file);
+    // + 1 for null terminator '\0'
+    uint32_t name_length = strlen(node->name) + 1;
+    fwrite(&name_length, sizeof(uint32_t), 1, file);
+
+    fwrite(node->name, sizeof(char), name_length, file);
+    debug(__func__, "wrote (name) to MFT:", node->name);
+
+    fwrite(&node->is_directory, sizeof(char), 1, file);
+    fwrite(&node->is_readonly, sizeof(char), 1, file);
+    fwrite(&node->filesize, sizeof(uint32_t), 1, file);
+    fwrite(&node->num_entries, sizeof(uint32_t), 1, file);
+
+    if (node->num_entries > 0){
+        if (node->is_directory) {
+            
+            uint32_t* child_ids = malloc(node->num_entries * sizeof(uint32_t));
+            if (!child_ids) {
+                debug(__func__, "failed to allocate memory for child IDs", "");
+                return;
+            }
+            
+            for (uint32_t i = 0; i < node->num_entries; i++) {
+                struct inode* child = (struct inode*)node->entries[i];
+                child_ids[i] = child->id;
+            }
+            
+            fwrite(child_ids, sizeof(uint32_t), node->num_entries, file);
+            free(child_ids);
+        } else {
+            
+            fwrite(node->entries, sizeof(uintptr_t), node->num_entries, file);
+        }
+    }
+
+    if (node->is_directory){
+        for (uint32_t i = 0; i < node->num_entries; i++){
+            _save_inodes_rec(file, (struct inode*) node->entries[i]);
+        }
+    }
+
 }
 
 void save_inodes(const char *master_file_table, struct inode *root)
 {
-    fprintf( stderr, "%s is not implemented\n", __FUNCTION__ );
+    if (DEBUG_MODE) hexdump(master_file_table);
+    FILE *file = fopen(master_file_table, "wb");
+    debug(__func__, "attempting to save to file:", master_file_table);
+    if (!file){
+        debug(__func__, "failed to open MFT file", "");
+        return;
+    }
+    _save_inodes_rec(file, root);
+    debug(__func__, "finish write to file:", master_file_table);
+    fclose(file);
+    if (DEBUG_MODE) hexdump(master_file_table);
 }
 
 struct inode *load_inodes(const char *master_file_table) {
@@ -339,7 +569,7 @@ struct inode *load_inodes(const char *master_file_table) {
         name = malloc(name_length);
         if (!name){
             debug(__func__, "failed to allocate memory for name", "");
-            free(name);
+            //free(name);
             return NULL;
         }
         fread(name, sizeof(char), name_length, file);
@@ -356,7 +586,7 @@ struct inode *load_inodes(const char *master_file_table) {
         entries = malloc(num_entries * sizeof(uintptr_t));
         if (!entries){
             debug(__func__, "failed to allocate memory for entries", "");
-            free(entries);
+            free(name);
             return NULL;
         }
         fread(entries, sizeof(uintptr_t), num_entries, file);
@@ -455,13 +685,13 @@ static void debug_fs_tree_walk( struct inode* node, char* table )
          * better way of handling extents in the node->entries array, and did
          * it like this because we don't want to give away a good solution here.
          */
-        uint32_t* extents = (uint32_t*)node->entries;
-
+        // Handle entries as blocks allocated to the file
+        // Each entry represents a block number - mark it in the table
         for( int i=0; i<node->num_entries; i++ )
         {
-            for( int j=0; j<extents[2*i+1]; j++ )
-            {
-                table[ extents[2*i]+j ] = 1;
+            int blockno = (int)node->entries[i];
+            if (blockno >= 0 && blockno < NUM_BLOCKS) {
+                table[blockno] = 1;
             }
         }
     }
