@@ -685,13 +685,13 @@ static void debug_fs_tree_walk( struct inode* node, char* table )
          * better way of handling extents in the node->entries array, and did
          * it like this because we don't want to give away a good solution here.
          */
-        uint32_t* extents = (uint32_t*)node->entries;
-
+        // Handle entries as blocks allocated to the file
+        // Each entry represents a block number - mark it in the table
         for( int i=0; i<node->num_entries; i++ )
         {
-            for( int j=0; j<extents[2*i+1]; j++ )
-            {
-                table[ extents[2*i]+j ] = 1;
+            int blockno = (int)node->entries[i];
+            if (blockno >= 0 && blockno < NUM_BLOCKS) {
+                table[blockno] = 1;
             }
         }
     }
