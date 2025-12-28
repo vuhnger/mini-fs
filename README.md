@@ -1,9 +1,10 @@
-# IN2140_V25
+## Mini-FS: A small File System implemented in C.
 
-Group participants
-- victou
-- hennion
-- halvoki
+## How to run
+
+`make`
+
+Or, honestly, just don't. 
 
 ## Important
 
